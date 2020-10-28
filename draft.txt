@@ -1,0 +1,994 @@
+
+
+10 FOREACH "tout * est *"
+15 Conclusion$ = STAR$(2)
+20 FOREACH "* est " & STAR$(1)
+30 ASSERT STAR$(1) & " est " & Conclusion$
+40 NEXT
+50 NEXT
+
+tout homme est mortel
+socrate est homme
+=> socrate est mortel
+
+
+
+
+
+
+
+manipuler la bdd
+================
+
+10 FOREACH "Michael conduit *"
+20 PRINT STAR$(1)
+30 NEXT
+
+50 ASSERT "Michael conduit K2000"
+60 RETRACT "* conduit K2000"
+
+55 ASSERT "Michael conduit K2000" IN "série tv"
+65 RETRACT "* conduit K2000" FROM "série tv"
+
+70 PRINT COUNT("Michael conduit *")
+
+80 ENTER "série tv", "pop culture"
+90 LEAVE "pop culture"
+
+
+
+
+
+
+
+un programme peut en éditer un autre !!!
+========================================
+
+
+
+créer un nouveau programme
+--------------------------
+
+100 NEW "program name"
+
+
+
+
+
+ouvrir / renommer / enregistrer / fermer / effacer un programme existant
+------------------------------------------------------------------------
+
+150 OPEN "program name"
+160 RENAME "new name"
+170 SAVE
+180 CLOSE
+190 ERASEPROGRAM "program name"
+
+après un CLOSE, la manipulation de programme est impossible
+
+
+
+
+
+catalogue des programmes existants
+----------------------------------
+
+210 FOR P = 1 TO PCOUNT
+220 PRINT PNAME$(P)
+230 NEXT
+
+
+
+
+
+éditer / créer une ligne
+------------------------
+
+300 EDIT linenum, "PRINT 5+5"
+
+
+
+
+
+effacer une ligne
+-----------------
+
+400 EDIT linenum, ''
+
+410 DELETELINES 420, 450
+
+
+
+lire les lignes de code
+-----------------------
+
+500 REFLECT NUM, CODE$, LINECOUNT
+510 FOR L = 1 TO LINECOUNT
+520 PRINT "Numéro de ligne " & L & " → " & NUM(L)
+530 PRINT "Ligne de code {L} → { CODE$(L) }"
+540 NEXT
+
+donnera
+
+    Numéro de ligne 1 → 500
+    Ligne de code 1 → LINE, CODE$, LINECOUNT
+    Numéro de ligne 2 → 510
+    Ligne de code 2 → FOR L = 1 TO LINECOUNT
+    ...
+
+
+
+
+renuméroter
+===========
+
+600 RENUM
+
+
+
+
+
+sauts
+=====
+
+700 GOTO 20
+
+renvoi vers une ligne fixe : contante nombre
+
+
+710 GOTO "FOR i = 1 TO"
+
+renvoi vers une substring : constante string
+la premiere substring trouvée en cherchant du début du programme (sans compter le GOTO)
+la recherche prend en compte les commentaires REM
+recalculé à chaque fois qu'on modifie le programme
+
+
+
+
+
+définir les patterns
+====================
+
+800 PATTERN "j'ai une * voiture *"
+850 END
+
+quand un pattern se déclenche, on lance l'exécution (de 800 jusqu'à 850)
+STAR$(1) et STAR$(2) reçoivent les 2 contenus extraits par le pattern
+
+860 TARGET "j'ai une grosse voiture"
+
+
+
+
+définir les pensées
+===================
+
+900 THOUGHT "* voiture *"
+910 END
+
+930 THOUGHT "a-t-il *"
+940 END
+
+960 THINK "a-t-il une voiture ?"
+
+quand une pensée se déclenche, on lance l'exécution pour tous les patterns de pensées
+STAR$(1) et STAR$(2) reçoivent les 2 contenus extraits par le pattern
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+========================================================================================PEGjs AST
+
+
+
+
+source
+= __* loc:line_of_code* __* {
+	
+	return loc.flat();
+}
+
+
+__
+= [ \t]* [\r\n]
+
+
+_
+= [ \t]*
+
+
+line_of_code
+= __* _ s:statement __ { return s; }
+/ __* _ ms:multi_statement __ { return ms; }
+
+
+number
+= sign1:'-'?
+  d1:[0-9]+
+  co:'.'?
+  d2:[0-9]*
+  e:'e'?
+  sign2:'-'?
+  d3:[0-9]* { return parseFloat(text()); }
+
+
+comment
+= "REM "i c:$[^\n]* { return c; }
+
+
+multi_statement
+= s:statement msp:multi_statement_part* {
+    return [s].concat(msp);
+}
+
+
+statement
+= comment
+/ var_declaration
+/ if_else_endif
+/ if_endif
+/ foreach
+/ for_step_next
+/ for_next
+/ assert_in
+/ retract_from
+/ after_gosub
+/ every_gosub
+/ assignment
+/ instruction_line
+
+
+identifier
+= !keyword c1:[a-zA-Z_] cn:$[a-zA-Z_0-9]* suf:('$'/'?')? _ { return c1 + cn + (suf || ''); }
+
+
+multi_statement_part
+= _ ':' _ s:statement { return s; }
+
+
+if_else_endif
+= "IF"i expr:expression _ "THEN"i _ then_loc:line_of_code+ _ "ELSE"i _ else_loc:line_of_code+ {
+    return {
+    	instruction: "conditional",
+        condition: expr,
+        thenPart: then_loc,
+        elsePart: else_loc
+    };
+}
+
+
+if_endif
+= "IF"i expr:expression _ "THEN"i _ then_loc:line_of_code+ {
+    return {
+    	instruction: "conditional",
+        condition: expr,
+        thenPart: then_loc,
+        elsePart: else_loc
+    };
+}
+
+
+foreach
+= "FOREACH"i _ expr:expression {
+    return {
+    	instruction: "foreachLoop",
+        pattern: expr,
+        step: 1,
+    };
+}
+
+
+for_step_next
+= "FOR"i _ id:identifier _ '=' _ expr1:expression _ "TO"i _ expr2:expression _ "STEP"i _ expr3:expression {
+    return {
+    	instruction: "forLoop",
+        variable: id,
+        start: expr1,
+        end: expr2,
+        step: expr3
+    };
+}
+
+
+for_next
+= "FOR"i _ id:identifier _ '=' _ expr1:expression _ "TO"i _ expr2:expression {
+    return {
+    	instruction: "forLoop",
+        variable: id,
+        start: expr1,
+        end: expr2,
+        step: 1,
+    };
+}
+
+
+assert_in
+= "ASSERT"i _ expr1:expression _ "IN"i _ expr2:expression {
+    return {
+    	instruction: "assertIn",
+        assertion: expr1,
+        context: expr2
+    };
+}
+/ "ASSERT"i _ expr1:expression {
+    return {
+    	instruction: "assertIn",
+        assertion: expr1,
+    };
+}
+
+
+retract_from
+= "RETRACT"i _ expr1:expression _ "FROM"i _ expr2:expression {
+    return {
+    	instruction: "retractFrom",
+        assertion: expr1,
+        context: expr2
+    };
+}
+/ "RETRACT"i _ expr1:expression {
+    return {
+    	instruction: "retractFrom",
+        assertion: expr1,
+    };
+}
+
+
+after_gosub
+= "AFTER"i _ expr1:expression _ "TIMER"i _ expr2:expression _ "GOSUB"i _ expr3:expression {
+    return {
+    	instruction: "afterGosub",
+        delay: expr1,
+        timer: expr2,
+        linenumber: expr3
+    };
+}
+
+
+every_gosub
+= "EVERY"i _ expr1:expression _ "TIMER"i _ expr2:expression _ "GOSUB"i _ expr3:expression {
+    return {
+    	instruction: "everyGosub",
+        delay: expr1,
+        timer: expr2,
+        linenumber: expr3
+    };
+}
+
+
+var_declaration
+= dec:("SHARED"i/"DISTINCT"i) _ v1:var_name _ vn:next_var_name* {
+	var list = [v1].concat(vn).map(item => {
+		var type;
+    	if (item.id[item.id.length-1] == '$') type = "STRING";
+    	else { if (item.id[item.id.length-1] == '?') type = "BOOLEAN";
+    	else type = "NUMBER"; }
+    	return {
+        	id: item.id,
+            dim: item.dim,
+            type: type
+        };
+    });
+    
+	return {
+    	instruction: "variableDeclaration",
+        shared: dec.toUpperCase() == "SHARED",
+        list: list
+    }
+}
+
+
+var_name
+= id:identifier '(' _ n:$[0-9]+ _ ')' {
+	return {
+        id: id,
+        dim: parseInt(n)
+    };
+}
+/ id:identifier {
+	return {
+        id: id,
+        dim: 0
+    };
+}
+
+next_var_name
+= ',' _ v:var_name { return v; }
+
+
+expression
+= head:term1 tail:(e_ ("+" / "-" / "OR" / "&") e_ term1)* {
+    return tail.reduce(function(result, element) {
+    	return { o1: result, fn: element[1], o2: element[3] };
+    }, head);
+}
+
+
+term1
+= head:term2 tail:(e_ ("*" / "/" / "MOD" / "AND") e_ term2)* {
+    return tail.reduce(function(result, element) {
+    	return { o1: result, fn: element[1], o2: element[3] };
+    }, head);
+}
+
+
+term2
+= head:term3 tail:(e_ ("=" / "<>" / "<=" / ">=" / "<" / ">") e_ term3)* {
+    return tail.reduce(function(result, element) {
+	    return { o1: result, fn: element[1], o2: element[3] };
+    }, head);
+}
+
+
+term3
+= "(" e_ expr:expression e_ ")" { return expr; }
+/ variable
+/ number_constant
+/ string_constant
+/ function_call
+
+
+number_constant
+= _ n:number {
+	return {
+    	type: "NUMBER",
+        value: n
+    };
+}
+
+
+string_constant
+= _ '"' c:$string_constant_char* '"' {
+	return {
+    	type: "STRING",
+        value: c
+    };
+}
+/ _ "'" c:$string_constant_char* "'" {
+	return {
+    	type: "STRING",
+        value: c
+    };
+}
+
+
+string_constant_char
+= c:[^"]
+/ '\\' c:. { return c; }
+
+
+variable
+= _ id:identifier index:var_index? {
+	let vartype = "NUMBER";
+    if (id[id.length-1] == '$') vartype = "STRING";
+    if (id[id.length-1] == '?') vartype = "BOOLEAN";
+	return {
+    	type: "variable",
+        vartype: vartype,
+        id: id,
+        index: index
+    };
+}
+
+
+var_index
+= '(' expr:expression ')' { return expr; }
+
+e_
+= [ \t]*
+
+
+assignment
+= v:variable _ '=' _ e:expression {
+	return {
+    	instruction: "assignment",
+        variable: v,
+        value: e
+    };
+}
+
+
+instruction_line
+= i:instruction _ a1:argument _ an:next_argument* {
+	return {
+    	instruction: i,
+        arguments: [a1].concat(an)
+    };
+}
+/ i:instruction {
+	return {
+    	instruction: i,
+    };
+}
+
+
+function_call
+= f:function _ '(' _ a1:argument _ an:next_argument* _ ')' {
+	return {
+    	type: "functionCall",
+    	function: f,
+        arguments: [a1].concat(an)
+    };
+}
+
+
+argument
+= expression
+
+
+next_argument
+= ',' _ a:argument { return a; }
+
+
+keyword
+= instruction / function
+
+
+instruction
+= "AFTER"i
+/ "ASSERT"i / "IN"i
+/ "CLEAR"i
+/ "CLOSE"i
+/ "CLS"i
+/ "CONTINUE"i
+/ "DATA"
+/ "DELAY"i
+/ "DELETELINES"i
+/ "DISTINCT"i
+/ "EDIT"i
+/ "END"i
+/ "ENTER"i
+/ "ERASEPROGRAM"i
+/ "FOR"i
+/ "FOREACH"i
+/ "GOSUB"i
+/ "GOTO"i
+/ "IF"i
+/ "INPUT"i
+/ "LEAVE"i
+/ "LIST"i
+/ "MESSAGE$"i
+/ "NEW"i
+/ "NEXT"i
+/ "ON"i
+/ "OPEN"i
+/ "PATTERN"i
+/ "PRINT"i
+/ "RANDOMIZE"i
+/ "READ"i
+/ "REFLECT"i
+/ "REM"i
+/ "RENAME"i
+/ "RENUM"i
+/ "RESTORE"i
+/ "RETRACT"i / "FROM"i
+/ "RETURN"i
+/ "RUN"i
+/ "SAVE"i
+/ "SHARED"i
+/ "THINK"i
+/ "THOUGHT"i
+
+
+function
+= "ABS"i
+/ "AND"i
+/ "CEIL"i
+/ "CHR$"i
+/ "COUNT"i
+/ "DATE$"i
+/ "ERR"i
+/ "ERL"i
+/ "FLOOR"i
+/ "LEFT$"i
+/ "LEN"i
+/ "MAX"i
+/ "MID$"i
+/ "MIN"i
+/ "MOD"i
+/ "NOT"i
+/ "OR"i
+/ "PCOUNT"i
+/ "PNAME$"i
+/ "REMAIN"i
+/ "RIGHT$"i
+/ "RND"i
+/ "ROUND"i
+/ "STAR$"i
+/ "STR$"i
+/ "TIME"i
+/ "VAL"i
+
+
+
+================================================================================================PEGjs string
+
+
+
+
+
+
+
+
+
+source
+= __* loc:line_of_code* __* {
+	
+	return loc.flat();
+}
+
+
+__
+= [ \t]* [\r\n]
+
+
+_
+= [ \t]*
+
+
+line_of_code
+= __* _ s:statement __ { return s; }
+/ __* _ ms:multi_statement __ { return ms; }
+
+
+number
+= sign1:'-'?
+  d1:[0-9]+
+  co:'.'?
+  d2:[0-9]*
+  e:'e'?
+  sign2:'-'?
+  d3:[0-9]* { return parseFloat(text()); }
+
+
+comment
+= "REM "i c:$[^\n]* { return "// "+c; }
+
+
+multi_statement
+= s:statement msp:multi_statement_part* {
+    return [s].concat(msp);
+}
+
+
+statement
+= comment
+/ var_declaration
+/ if_else_endif
+/ if_endif
+/ foreach
+/ for_step_next
+/ for_next
+/ assert_in
+/ retract_from
+/ after_gosub
+/ every_gosub
+/ assignment
+/ instruction_line
+
+
+identifier
+= !keyword c1:[a-zA-Z_] cn:$[a-zA-Z_0-9]* suf:('$'/'?')? _ { return c1 + cn + (suf || ''); }
+
+
+multi_statement_part
+= _ ':' _ s:statement { return s; }
+
+
+if_else_endif
+= "IF"i _ expr:expression _ "THEN"i _ then_s:statement _ "ELSE"i _ else_s:statement {
+    return `BASIC.CONDITIONAL(${expr},(BASIC)=>{${then_s}},(BASIC)=>{${else_s}})`;
+}
+
+
+if_endif
+= "IF"i _ expr:expression _ "THEN"i _ then_s:statement {
+    return `BASIC.CONDITIONAL(${expr},(BASIC)=>{${then_s}})`;
+}
+
+
+foreach
+= "FOREACH"i _ expr:expression {
+    return `BASIC.FOREACHLOOP(${expr})`;
+}
+
+
+for_step_next
+= "FOR"i _ v:variableObject _ '=' _ expr1:expression _ "TO"i _ expr2:expression _ "STEP"i _ expr3:expression {
+    return `BASIC.FORLOOP(${JSON.stringify(v)},${expr1},${expr2},${expr3})`;
+}
+
+
+for_next
+= "FOR"i _ v:variableObject _ '=' _ expr1:expression _ "TO"i _ expr2:expression {
+    return `BASIC.FORLOOP(${JSON.stringify(v)},${expr1},${expr2},1)`;
+}
+
+
+assert_in
+= "ASSERT"i _ expr1:expression _ "IN"i _ expr2:expression {
+    return "BASIC.ASSERTIN("+expr1+','+expr2+");";
+}
+/ "ASSERT"i _ expr1:expression {
+    return "BASIC.ASSERTIN("+expr1+");";
+}
+
+
+retract_from
+= "RETRACT"i _ expr1:expression _ "FROM"i _ expr2:expression {
+    return "BASIC.RETRACTFROM("+expr1+','+expr2+");";
+}
+/ "RETRACT"i _ expr1:expression {
+    return "BASIC.RETRACTFROM("+expr1+");";
+}
+
+
+after_gosub
+= "AFTER"i _ expr1:expression _ "TIMER"i _ expr2:expression _ "GOSUB"i _ expr3:expression {
+
+	return `BASIC.AFTERGOSUB(${expr1},${expr2},${expr3})`;
+}
+
+
+every_gosub
+= "EVERY"i _ expr1:expression _ "TIMER"i _ expr2:expression _ "GOSUB"i _ expr3:expression {
+
+	return `BASIC.EVERYGOSUB(${expr1},${expr2},${expr3})`;
+}
+
+
+var_declaration
+= dec:("SHARED"i/"DISTINCT"i) _ v1:var_name _ vn:next_var_name* {
+	var list = [v1].concat(vn).map(item => {
+		var type;
+    	if (item.id[item.id.length-1] == '$') type = "STRING";
+    	else { if (item.id[item.id.length-1] == '?') type = "BOOLEAN";
+    	else type = "NUMBER"; }
+    	return {
+        	id: item.id,
+            dim: item.dim,
+            type: type
+        };
+    });
+	return `BASIC.VARDECLARE("${dec}", ${JSON.stringify(list, null, 4)})`;
+}
+
+
+var_name
+= id:identifier '(' _ n:$[0-9]+ _ ')' {
+	return {
+        id: id,
+        dim: parseInt(n)
+    };
+}
+/ id:identifier {
+	return {
+        id: id,
+        dim: 0
+    };
+}
+
+
+next_var_name
+= ',' _ v:var_name { return v; }
+
+
+expression
+= head:term1 tail:(e_ ("+" / "-" / "OR" / "&") e_ term1)* {
+    return tail.reduce(function(result, element) {
+    	if (element[1] == 'OR') return result + '||' + element[3];
+    	if (element[1] == '&') return result + "+''+" + element[3];
+    	return result + element[1] + element[3];
+    }, head);
+}
+
+
+term1
+= head:term2 tail:(e_ ("*" / "/" / "MOD" / "AND") e_ term2)* {
+    return tail.reduce(function(result, element) {
+    	if (element[1] == 'MOD') return result + '%' + element[3];
+    	if (element[1] == 'AND') return result + '&&' + element[3];
+    	return result + element[1] + element[3];
+    }, head);
+}
+
+
+term2
+= head:term3 tail:(e_ ("=" / "<>" / "<=" / ">=" / "<" / ">") e_ term3)* {
+    return tail.reduce(function(result, element) {
+    	if (element[1] == '=') return result + '==' + element[3];
+    	return result + element[1] + element[3];
+    }, head);
+}
+
+
+term3
+= "(" e_ expr:expression e_ ")" { return '('+expr+')'; }
+/ variable
+/ number_constant
+/ string_constant
+/ function_call
+
+
+number_constant
+= _ n:number {
+	return n;
+}
+
+
+string_constant
+= _ '"' c:$string_constant_char* '"' {
+	return text();
+}
+/ _ "'" c:$string_constant_char* "'" {
+	return text();
+}
+
+
+string_constant_char
+= c:[^"]
+/ '\\' c:. { return c; }
+
+
+variable
+= _ id:identifier index:var_index? {
+	let vartype = "NUMBER";
+    if (id[id.length-1] == '$') vartype = "STRING";
+    if (id[id.length-1] == '?') vartype = "BOOLEAN";
+    return `BASIC.GETVAR("${vartype}", "${id}", ${index})`;
+}
+
+
+variableObject
+= _ id:identifier index:var_index? {
+	let vartype = "NUMBER";
+    if (id[id.length-1] == '$') vartype = "STRING";
+    if (id[id.length-1] == '?') vartype = "BOOLEAN";
+    return {
+    	identifier: id,
+        vartype: vartype,
+        index: index
+    };
+}
+
+
+var_index
+= '(' expr:expression ')' { return expr; }
+
+e_
+= [ \t]*
+
+
+assignment
+= v:variableObject _ '=' _ e:expression {
+
+	return `BASIC.SETVAR("${v.identifier}","${v.vartype}",${v.index},${e})`;
+}
+
+
+instruction_line
+= i:instruction _ a1:argument _ an:next_argument* {
+    return `BASIC.${i.toUpperCase()}([${[a1].concat(an)}])`;
+}
+/ i:instruction {
+    return `BASIC.${i.toUpperCase()}()`;
+}
+
+
+function_call
+= f:function _ '(' _ a1:argument _ an:next_argument* _ ')' {
+
+	return `BASIC.${f.toUpperCase()}([${[a1].concat(an)}])`;
+}
+/ f:function _ '(' _ ')' {
+
+	return `BASIC.${f.toUpperCase()}()`;
+}
+
+
+argument
+= expression
+
+
+next_argument
+= ',' _ a:argument { return a; }
+
+
+keyword
+= instruction / function
+
+
+instruction
+= "AFTER"i
+/ "ASSERT"i / "IN"i
+/ "CLEAR"i
+/ "CLOSE"i
+/ "CLS"i
+/ "CONTINUE"i
+/ "DATA"
+/ "DELAY"i
+/ "DELETELINES"i
+/ "DISTINCT"i
+/ "EDIT"i
+/ "END"i
+/ "ENTER"i
+/ "ERASEPROGRAM"i
+/ "FOR"i
+/ "FOREACH"i
+/ "GOSUB"i
+/ "GOTO"i
+/ "INPUT"i
+/ "LEAVE"i
+/ "LIST"i
+/ "MESSAGE$"i
+/ "NEW"i
+/ "NEXT"i
+/ "ON"i
+/ "OPEN"i
+/ "PATTERN"i
+/ "PRINT"i
+/ "RANDOMIZE"i
+/ "READ"i
+/ "REFLECT"i
+/ "REM"i
+/ "RENAME"i
+/ "RENUM"i
+/ "RESTORE"i
+/ "RETRACT"i / "FROM"i
+/ "RETURN"i
+/ "RUN"i
+/ "SAVE"i
+/ "SHARED"i
+/ "THINK"i
+/ "THOUGHT"i
+
+
+function
+= "ABS"i
+/ "AND"i
+/ "CEIL"i
+/ "CHR$"i
+/ "COUNT"i
+/ "DATE$"i
+/ "ERR"i
+/ "ERL"i
+/ "FLOOR"i
+/ "LEFT$"i
+/ "LEN"i
+/ "MAX"i
+/ "MID$"i
+/ "MIN"i
+/ "MOD"i
+/ "NOT"i
+/ "OR"i
+/ "PCOUNT"i
+/ "PNAME$"i
+/ "REMAIN"i
+/ "RIGHT$"i
+/ "RND"i
+/ "ROUND"i
+/ "STAR$"i
+/ "STR$"i
+/ "TIME"i
+/ "VAL"i
+
+
+reserved
+= "IF"i
+/ "THEN"i
+/ "ELSE"i
