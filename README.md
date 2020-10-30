@@ -9,7 +9,8 @@ An unstructured BASIC interpreter, with special commands that bring AIML style c
 ## TODO
 
 * [X] Interpreter skeleton
-* [ ] Session save/load
+* [ ] Session save/load & import/export
 * [ ] Variable declarations
 * [ ] Variable types & type errors
 * [ ] Documentation
+* [X] Fun
