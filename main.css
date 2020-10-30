@@ -94,7 +94,7 @@ body * {
     font-size: 12px;
     cursor: pointer;
     opacity: 0.8;
-    font-variant: small-caps;
+    /*font-variant: small-caps;*/
 }
 
 
@@ -113,5 +113,5 @@ body * {
     bottom: 1em;
     right: 2em;
     font-size: 12px;
-    z-index: 201;
+    z-index: 10000;
 }

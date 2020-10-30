@@ -21,7 +21,7 @@ Split(["#editor", "#terminal"], {
         }
     },
     onDragEnd: function (sizes) {
-        localStorage.setItem('split-sizes', JSON.stringify(sizes))
+        localStorage.setItem('split-sizes', JSON.stringify(sizes));
     },
 });
 

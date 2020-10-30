@@ -1,6 +1,6 @@
 
 
-var termBASIC = new Interpreter();
+var termBASIC = new Interpreter("terminal-interpreter");
 
 
 

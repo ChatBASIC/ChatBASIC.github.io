@@ -1,16 +1,20 @@
 
 
 
-function Interpreter(src) {
+function Interpreter(id, src) {
 
     this.program = {};
     this.sourceCode = {};
     this.variable = {};
-    this.progPointer = "stop"; // points a line in a program
-    this.linePointer = 0;      // points a statement in a line
+    this.progPointer = "stop"; // points to a line in a program
+    this.linePointer = 0;      // points to a statement in a line
     this.nextProgPointer = "stop";
     this.nextLinePointer = "stop";
     this.forLoopStack = [];
+    this.orderedLines = []; // line numbers, in order
+
+    this.id = id;
+    session.data.interpreters[id] = this;
 }
 
 
@@ -25,20 +29,22 @@ Interpreter.prototype.raiseError = function (err) {
 
 Interpreter.prototype.run = function (start) {
 
-    this.progPointer = this.orderedLines().filter(l => l >= (start || 0))[0];
+    this.progPointer = this.orderedLines.filter(l => l >= (start || 0))[0];
 
     while (this.progPointer) {
 
-        this.nextProgPointer = this.orderedLines().filter(l => l > this.progPointer)[0];
+        if (this.linePointer < this.program[this.progPointer].length - 1) {
+            this.nextLinePointer = this.linePointer + 1;
+            this.nextProgPointer = this.progPointer;
+        } else {
+            this.nextProgPointer = this.orderedLines.filter(l => l > this.progPointer)[0]; // todo: enhance
+            this.nextLinePointer = 0;
+        }
 
         this.that = this.execute(this.program[this.progPointer], this.linePointer);
 
-        if (this.linePointer < this.program[this.progPointer].length - 1) {
-            this.linePointer++;
-        } else {
-            this.progPointer = this.nextProgPointer;
-            this.linePointer = 0;
-        }
+        this.progPointer = this.nextProgPointer;
+        this.linePointer = this.nextLinePointer;
     }
 
     this.progPointer = "stop";
@@ -46,9 +52,9 @@ Interpreter.prototype.run = function (start) {
 
 
 
-Interpreter.prototype.orderedLines = function () {
+Interpreter.prototype.refreshOrderedLines = function () {
 
-    return Object.keys(this.program).map(t => parseInt(t)).sort((a, b) => { a < b });
+    this.orderedLines = Object.keys(this.program).map(t => parseInt(t)).sort((a, b) => { a < b });
 };
 
 
@@ -78,13 +84,15 @@ Interpreter.prototype.edit = function (lineNumber, compiled, sourceCode) {
 
     this.program[lineNumber] = compiled;
     this.sourceCode[lineNumber] = sourceCode
+
+    this.refreshOrderedLines();
 };
 
 
 
 Interpreter.prototype.goto = function (n) {
 
-    this.nextProgPointer = this.orderedLines().filter(l => l >= n)[0];
+    this.nextProgPointer = this.orderedLines.filter(l => l >= n)[0];
     this.nextLinePointer = 0;
 };
 
@@ -92,18 +100,16 @@ Interpreter.prototype.goto = function (n) {
 
 Interpreter.prototype.list = function (rawStart, rawEnd) {
 
-    var lineList = this.orderedLines();
+    var start = rawStart || this.orderedLines[0];
+    var end = rawEnd || this.orderedLines[this.orderedLines.length - 1];
 
-    var start = rawStart || lineList[0];
-    var end = rawEnd || lineList[lineList.length - 1];
-
-    lineList.filter(l => l >= start && l <= end).forEach(l => { print(l + ' ' + this.sourceCode[l]); });
+    this.orderedLines.filter(l => l >= start && l <= end).forEach(l => { this.print(l + ' ' + this.sourceCode[l]); });
 };
 
 
 
 Interpreter.prototype.execute = function (compiled, statementIndex) {
-
+    
     if (this.skip) {
 
         this.skip = false;
@@ -216,7 +222,6 @@ Interpreter.prototype.CONDITIONAL = function (condition, then_s, else_s) {
 
 Interpreter.prototype.FORLOOP = function (variable, startv, endv, stepv) {
 
-    //console.log("for");
     this.pushForLoop(variable, startv, endv, stepv, this.progPointer, this.linePointer);
     var topmost = this.forLoopStack[this.forLoopStack.length - 1];
     this.SETVAR(topmost.variable.identifier, topmost.variable.vartype, topmost.variable.index, topmost.currentv);
@@ -251,6 +256,12 @@ Interpreter.prototype.NEXT = function () {
 
 Interpreter.prototype.RUN = function () {
     this.run();
+};
+
+
+
+Interpreter.prototype.LIST = function () {
+    this.list();
 };
 
 
