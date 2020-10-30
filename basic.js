@@ -1,153 +1,176 @@
 
 
-var BASIC = {};
-var that;
 
-BASIC.program = {};
-BASIC.sourceCode = {};
-BASIC.variable = {};
-BASIC.progPointer = "stop"; // points a line in a program
-BASIC.linePointer = 0;      // points a statement in a line
-BASIC.nextProgPointer = "stop";
-BASIC.nextLinePointer = "stop";
-BASIC.forLoopStack = [];
+function Interpreter(src) {
 
-
-const print = function (txt) {
-
-    ui.t(txt);
+    this.program = {};
+    this.sourceCode = {};
+    this.variable = {};
+    this.progPointer = "stop"; // points a line in a program
+    this.linePointer = 0;      // points a statement in a line
+    this.nextProgPointer = "stop";
+    this.nextLinePointer = "stop";
+    this.forLoopStack = [];
 }
 
-const input = function (txt, vname) {
 
-    ui.t(txt, (r) => { window[vname] = r; });
-}
 
-const edit = function (lineNumber, compiled, sourceCode) {
+Interpreter.prototype.raiseError = function (err) {
 
-    BASIC.program[lineNumber] = compiled;
-    BASIC.sourceCode[lineNumber] = sourceCode
-}
+    this.err = err;
+    this.erl = this.progPointer;
+};
 
-const run = function (start) {
 
-    BASIC.progPointer = BASIC.orderedLines().filter(l => l >= (start || 0))[0];
 
-    while (BASIC.progPointer) {
+Interpreter.prototype.run = function (start) {
 
-        BASIC.nextProgPointer = BASIC.orderedLines().filter(l => l > BASIC.progPointer)[0];
-        
-        BASIC.that = BASIC.execute(BASIC.program[BASIC.progPointer], BASIC.linePointer);
-        
-        if (BASIC.linePointer < BASIC.program[BASIC.progPointer].length-1) {
-            BASIC.linePointer++;
+    this.progPointer = this.orderedLines().filter(l => l >= (start || 0))[0];
+
+    while (this.progPointer) {
+
+        this.nextProgPointer = this.orderedLines().filter(l => l > this.progPointer)[0];
+
+        this.that = this.execute(this.program[this.progPointer], this.linePointer);
+
+        if (this.linePointer < this.program[this.progPointer].length - 1) {
+            this.linePointer++;
         } else {
-            BASIC.progPointer = BASIC.nextProgPointer;
-            BASIC.linePointer = 0;
+            this.progPointer = this.nextProgPointer;
+            this.linePointer = 0;
         }
     }
 
-    BASIC.progPointer = "stop";
-}
+    this.progPointer = "stop";
+};
 
-const goto = function (n) {
 
-    BASIC.nextProgPointer = BASIC.orderedLines().filter(l => l >= n)[0];
-    BASIC.nextLinePointer = 0;
-}
 
-const list = function (rawStart, rawEnd) {
+Interpreter.prototype.orderedLines = function () {
 
-    var lineList = BASIC.orderedLines();
+    return Object.keys(this.program).map(t => parseInt(t)).sort((a, b) => { a < b });
+};
+
+
+
+Interpreter.prototype.cls = function () {
+
+    ui.t();
+};
+
+
+
+Interpreter.prototype.print = function (txt) {
+
+    ui.t(txt);
+};
+
+
+
+Interpreter.prototype.input = function (txt, vname) {
+
+    ui.t(txt, (r) => { window[vname] = r; });
+};
+
+
+
+Interpreter.prototype.edit = function (lineNumber, compiled, sourceCode) {
+
+    this.program[lineNumber] = compiled;
+    this.sourceCode[lineNumber] = sourceCode
+};
+
+
+
+Interpreter.prototype.goto = function (n) {
+
+    this.nextProgPointer = this.orderedLines().filter(l => l >= n)[0];
+    this.nextLinePointer = 0;
+};
+
+
+
+Interpreter.prototype.list = function (rawStart, rawEnd) {
+
+    var lineList = this.orderedLines();
 
     var start = rawStart || lineList[0];
     var end = rawEnd || lineList[lineList.length - 1];
 
-    lineList.filter(l => l >= start && l <= end).forEach(l => { print(l + ' ' + BASIC.sourceCode[l]); });
-}
+    lineList.filter(l => l >= start && l <= end).forEach(l => { print(l + ' ' + this.sourceCode[l]); });
+};
 
-const cls = function () {
-    ui.t();
-}
 
-BASIC.execute = function (compiled, statementIndex) {
 
-    //console.log("[execute linePointer]", BASIC.linePointer);
+Interpreter.prototype.execute = function (compiled, statementIndex) {
 
-    if (BASIC.skip) {
-        //console.log("[skipped]");
-        BASIC.skip = false;
-        return BASIC.that;
+    if (this.skip) {
+
+        this.skip = false;
+        return this.that;
     }
 
     if (compiled) {
-        return compiled[statementIndex](BASIC, statementIndex);
+        return compiled[statementIndex](this);
     } else {
         alert(JSON.stringify(compiled, null, 4));
     }
-}
+};
 
-BASIC.compile = function (code, linenum) {
+
+
+Interpreter.prototype.compile = function (code, linenum) {
 
     try {
 
-        //console.log("[parse]", parser.parse(code + '\n'));
         return parser.parse(code + '\n').map(parsed => new Function("BASIC", parsed));
 
     } catch (e) {
 
-        BASIC.err = "Syntax error: " + e.message;
-        if (linenum) BASIC.erl = linenum;
+        this.err = "Syntax error: " + e.message;
+        if (linenum) this.erl = linenum;
         return null;
     }
-}
+};
 
-BASIC.evalInput = function (cmd) {
+
+
+Interpreter.prototype.evalInput = function (cmd) {
 
     var first = cmd.substr(0, cmd.indexOf(' '));
     var lineNumber = parseInt(first);
+
     if (first.length > 0 && !isNaN(lineNumber)) {
 
-        let compiled = BASIC.compile(cmd.substr(first.length), lineNumber);
+        let compiled = this.compile(cmd.substr(first.length), lineNumber);
         if (compiled) {
-            edit(lineNumber, compiled, cmd.substr(first.length).trim());
+            this.edit(lineNumber, compiled, cmd.substr(first.length).trim());
         } else {
-            print(BASIC.err);
+            this.print(this.err);
         }
 
     } else {
 
-        let compiled = BASIC.compile(cmd);
+        let compiled = this.compile(cmd);
         if (compiled) {
-            BASIC.linePointer = 0;
-            while (BASIC.linePointer <= compiled.length-1) {
-                //console.log("[evalInput linePointer]", BASIC.linePointer);
-                //console.log("[evalInput compiled.length]", compiled.length);
-                //console.log("[evalInput compiled]", compiled.toString());
-                BASIC.that = BASIC.execute(compiled, BASIC.linePointer);
-                BASIC.linePointer++;
-            }    
+            this.linePointer = 0;
+            while (this.linePointer <= compiled.length - 1) {
+                this.that = this.execute(compiled, this.linePointer);
+                this.linePointer++;
+            }
         } else {
-            
-            print(BASIC.err);
+
+            this.print(this.err);
         }
-        print("Ready");
+        this.print("Ready");
     }
-}
+};
 
-BASIC.orderedLines = function () {
-    return Object.keys(BASIC.program).map(t => parseInt(t)).sort((a, b) => { a < b });
-}
 
-BASIC.raiseError = function (err) {
 
-    BASIC.err = err;
-    BASIC.erl = BASIC.progPointer;
-}
+Interpreter.prototype.pushForLoop = function (variable, startv, endv, stepv, progPointer, linePointer) {
 
-BASIC.pushForLoop = function(variable, startv, endv, stepv, progPointer, linePointer) {
-
-    BASIC.forLoopStack.push({
+    this.forLoopStack.push({
         variable: variable,
         currentv: startv,
         endv: endv,
@@ -159,73 +182,80 @@ BASIC.pushForLoop = function(variable, startv, endv, stepv, progPointer, linePoi
 
 
 
+Interpreter.prototype.PRINT = function (line) {
 
-
-
-
-BASIC.PRINT = (line) => {
-    //console.log("print");
-    print(line.join(''));
+    this.print(line.join(''));
 };
 
-BASIC.SETVAR = (vname, vtype, vindex, value) => {
+
+
+Interpreter.prototype.SETVAR = function (vname, vtype, vindex, value) {
     if (typeof value == vtype.toLowerCase())
-        BASIC.variable[vname + '(' + vindex + ')'] = value;
+        this.variable[vname + '(' + vindex + ')'] = value;
     else
-        BASIC.raiseError("Type mismatch");
+        this.raiseError("Type mismatch");
 };
 
-BASIC.GETVAR = (vtype, vname, vindex) => {
-    return BASIC.variable[vname + '(' + vindex + ')'];
+
+
+Interpreter.prototype.GETVAR = function (vtype, vname, vindex) {
+    return this.variable[vname + '(' + vindex + ')'];
 };
 
-BASIC.CONDITIONAL = (condition, then_s, else_s) => {
 
-    if (condition) then_s(BASIC);
+
+Interpreter.prototype.CONDITIONAL = function (condition, then_s, else_s) {
+
+    if (condition) then_s(this);
     else {
-        if (else_s) else_s(BASIC);
+        if (else_s) else_s(this);
     }
 };
 
-BASIC.FORLOOP = (variable, startv, endv, stepv) => {
+
+
+Interpreter.prototype.FORLOOP = function (variable, startv, endv, stepv) {
 
     //console.log("for");
-    BASIC.pushForLoop(variable, startv, endv, stepv, BASIC.progPointer, BASIC.linePointer);
-    var topmost = BASIC.forLoopStack[BASIC.forLoopStack.length-1];
-    BASIC.SETVAR(topmost.variable.identifier, topmost.variable.vartype, topmost.variable.index, topmost.currentv);
+    this.pushForLoop(variable, startv, endv, stepv, this.progPointer, this.linePointer);
+    var topmost = this.forLoopStack[this.forLoopStack.length - 1];
+    this.SETVAR(topmost.variable.identifier, topmost.variable.vartype, topmost.variable.index, topmost.currentv);
 };
 
-BASIC.NEXT = () => {
 
-    var topmost = BASIC.forLoopStack[BASIC.forLoopStack.length-1];
+
+Interpreter.prototype.NEXT = function () {
+
+    var topmost = this.forLoopStack[this.forLoopStack.length - 1];
     var precondition = true;
     if (topmost.stepv == 0) precondition = false;
     if (topmost.stepv > 0 && (topmost.currentv > topmost.endv - topmost.stepv)) precondition = false;
     if (topmost.stepv < 0 && (topmost.currentv < topmost.endv - topmost.stepv)) precondition = false;
     if (precondition && (topmost.currentv != topmost.endv)) {
-        
+
         topmost.currentv += topmost.stepv;
-        BASIC.SETVAR(topmost.variable.identifier, topmost.variable.vartype, topmost.variable.index, topmost.currentv);
+        this.SETVAR(topmost.variable.identifier, topmost.variable.vartype, topmost.variable.index, topmost.currentv);
 
-        BASIC.nextProgPointer = topmost.progPointer;
-        BASIC.linePointer = topmost.linePointer;
+        this.nextProgPointer = topmost.progPointer;
+        this.linePointer = topmost.linePointer;
 
-        if (BASIC.progPointer != "stop") BASIC.skip = true;
+        if (this.progPointer != "stop") this.skip = true;
 
     } else {
 
-        BASIC.forLoopStack.pop();
+        this.forLoopStack.pop();
     }
 };
 
-BASIC.RUN = () => {
-    run();
-}
+
+
+Interpreter.prototype.RUN = function () {
+    this.run();
+};
 
 
 
-
-BASIC.wrongType = function () {
+Interpreter.prototype.wrongType = function () {
 
     for (let a = 0; a < arguments.length; a += 2) {
         if (arguments[a].type != arguments[a + 1]) return {
@@ -234,4 +264,4 @@ BASIC.wrongType = function () {
         };
     }
     return false;
-}
+};

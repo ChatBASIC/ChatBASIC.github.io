@@ -29,7 +29,7 @@ Split(["#editor", "#terminal"], {
 var jQueryTerminal = $('#terminal').terminal(function (command) {
     if (command !== '') {
         try {
-            var result = BASIC.evalInput(command);
+            var result = termBASIC.evalInput(command);
             if (typeof result != "undefined") this.echo(JSON.stringify(result, null, 4));
         } catch (e) {
             this.echo(e.message);
